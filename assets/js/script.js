@@ -158,12 +158,19 @@ if (filterButtons.length && workCards.length) {
         const isVisible = filter === "all" || card.dataset.category === filter;
         card.classList.toggle("is-hidden", !isVisible);
 
+        const video = card.querySelector("[data-portfolio-video]");
+        if (!video) {
+          return;
+        }
+
         if (!isVisible) {
-          const video = card.querySelector("[data-portfolio-video]");
           if (video) {
             stopAmbientVideo(video, { reset: true });
           }
+          return;
         }
+
+        updatePortfolioVideo(video);
       });
     });
   });
@@ -183,10 +190,12 @@ function prepareAmbientVideo(video) {
   video.playsInline = true;
   video.loop = true;
   video.autoplay = true;
+  video.preload = "metadata";
   video.setAttribute("muted", "");
   video.setAttribute("playsinline", "");
   video.setAttribute("loop", "");
   video.setAttribute("autoplay", "");
+  video.setAttribute("preload", "metadata");
 
   if (!video.hasAttribute("controls")) {
     video.controls = false;
@@ -231,7 +240,7 @@ function playAmbientVideo(video) {
     .then(() => {
       state.playAttempt = null;
       state.hasPlayed = true;
-      if (video !== heroVideo) {
+      if (video !== heroVideo && !video.hasAttribute("data-portfolio-video")) {
         video.removeAttribute("poster");
       }
       return true;
@@ -398,18 +407,90 @@ function isPortfolioVideoVisible(video) {
   return visibleHeight > threshold;
 }
 
+function getPortfolioSourceElement(video) {
+  return video.querySelector("source[data-src], source[src]");
+}
+
+function ensurePortfolioVideoSource(video) {
+  const source = getPortfolioSourceElement(video);
+  if (!source) {
+    return false;
+  }
+
+  const nextSrc = source.dataset.src || source.getAttribute("src");
+  if (!nextSrc) {
+    return false;
+  }
+
+  if (source.getAttribute("src") !== nextSrc) {
+    source.setAttribute("src", nextSrc);
+    video.load();
+  }
+
+  return true;
+}
+
+function bindPortfolioReadyPlayback(video) {
+  const state = ensureAmbientVideoState(video);
+  if (state.readyHandlerAttached) {
+    return;
+  }
+
+  const handleReady = () => {
+    const nextState = ensureAmbientVideoState(video);
+    nextState.readyHandlerAttached = false;
+    video.removeEventListener("loadeddata", handleReady);
+    video.removeEventListener("canplay", handleReady);
+
+    if (isPortfolioVideoVisible(video) && !reduceMotion.matches) {
+      playAmbientVideo(video);
+    }
+  };
+
+  state.readyHandlerAttached = true;
+  video.addEventListener("loadeddata", handleReady);
+  video.addEventListener("canplay", handleReady);
+}
+
+function shouldPrimePortfolioVideo(entry) {
+  return entry.isIntersecting || entry.boundingClientRect.top <= window.innerHeight + 300;
+}
+
 function updatePortfolioVideo(video) {
   if (reduceMotion.matches) {
     stopAmbientVideo(video, { reset: true });
     return;
   }
 
+  prepareAmbientVideo(video);
+
   if (isPortfolioVideoVisible(video)) {
-    playAmbientVideo(video);
+    if (!ensurePortfolioVideoSource(video)) {
+      return;
+    }
+
+    if (video.readyState >= 2) {
+      playAmbientVideo(video);
+    } else {
+      bindPortfolioReadyPlayback(video);
+    }
     return;
   }
 
   stopAmbientVideo(video);
+}
+
+function primePortfolioVideo(video) {
+  if (reduceMotion.matches) {
+    return;
+  }
+
+  prepareAmbientVideo(video);
+  ensurePortfolioVideoSource(video);
+
+  if (isPortfolioVideoVisible(video)) {
+    updatePortfolioVideo(video);
+  }
 }
 
 if (portfolioVideos.length && "IntersectionObserver" in window) {
@@ -423,8 +504,12 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
           return;
         }
 
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.2) {
-          playAmbientVideo(video);
+        if (shouldPrimePortfolioVideo(entry)) {
+          primePortfolioVideo(video);
+        }
+
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.01) {
+          updatePortfolioVideo(video);
           return;
         }
 
@@ -432,8 +517,8 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
       });
     },
     {
-      threshold: [0, 0.2, 0.4, 0.65],
-      rootMargin: "0px 0px 12% 0px",
+      threshold: [0, 0.01, 0.15, 0.35, 0.6],
+      rootMargin: "300px 0px 300px 0px",
     }
   );
 
