@@ -1348,6 +1348,7 @@ footer {
     width: calc(100% - 32px);
     margin-inline: 16px;
     padding-top: 150px;
+    text-align: center;
   }
 
   .home-reel-video {
@@ -1360,9 +1361,12 @@ footer {
 
   .hero-copy {
     max-width: 360px;
+    margin-inline: auto;
+    margin-bottom: 30px;
   }
 
   .hero-actions {
+    justify-content: center;
     gap: 12px;
   }
 
@@ -1376,17 +1380,32 @@ footer {
   }
 
   .testimonial-heading {
-    align-items: start;
+    align-items: center;
     flex-direction: column;
+    gap: 18px;
+    text-align: center;
   }
 
   .testimonial-controls {
-    align-self: flex-start;
+    align-self: center;
   }
 
   .section {
     width: min(100% - 32px, 1180px);
     padding: 64px 0;
+  }
+
+  .eyebrow {
+    margin-bottom: 12px;
+  }
+
+  .hero h1,
+  .home-reel-copy h2,
+  .intro h2,
+  .section-heading h2,
+  .cta-band h2,
+  .contact h2 {
+    margin-bottom: 16px;
   }
 
   .intro,
@@ -1396,6 +1415,88 @@ footer {
   .faq {
     width: 100%;
     padding: 64px 16px;
+  }
+
+  .home-reel-copy,
+  .intro > div:first-child,
+  .intro-copy,
+  .section-heading,
+  .cta-band > div:first-child,
+  .contact > div:first-child {
+    text-align: center;
+  }
+
+  .home-reel-copy,
+  .intro > div:first-child,
+  .intro-copy,
+  .section-heading > div,
+  .section-heading > p,
+  .cta-band > div:first-child,
+  .contact > div:first-child {
+    margin-inline: auto;
+  }
+
+  .home-reel-copy,
+  .intro > div:first-child,
+  .intro-copy,
+  .section-heading > div,
+  .section-heading > p,
+  .cta-band > div:first-child,
+  .contact > div:first-child,
+  .testimonial-heading > div:first-child {
+    max-width: 34rem;
+  }
+
+  .home-reel-copy p:not(.eyebrow),
+  .intro-copy p,
+  .section-heading > p,
+  .cta-band > div:first-child > p:not(.eyebrow),
+  .contact > div:first-child > p:not(.eyebrow) {
+    margin-inline: auto;
+    margin-bottom: 30px;
+  }
+
+  .home-reel-copy p:not(.eyebrow),
+  .intro-copy p,
+  .section-heading > p,
+  .contact-list {
+    max-width: 31rem;
+  }
+
+  .home-reel-copy .button,
+  .cta-band > div:first-child .button {
+    margin-inline: auto;
+  }
+
+  .home-reel-meta {
+    max-width: 22rem;
+    margin: 0 auto 30px;
+    text-align: center;
+  }
+
+  .intro {
+    row-gap: 26px;
+  }
+
+  .section-heading {
+    margin-bottom: 30px;
+  }
+
+  .split {
+    gap: 24px;
+  }
+
+  .split > p {
+    padding-top: 0;
+  }
+
+  .cta-band {
+    gap: 28px;
+  }
+
+  .cta-band h2 {
+    margin-inline: auto;
+    margin-bottom: 22px;
   }
 
   .feature-strip,
@@ -1430,6 +1531,23 @@ footer {
   .cta-images {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
+  }
+
+  .contact {
+    gap: 30px;
+  }
+
+  .contact > div:first-child {
+    display: grid;
+    justify-items: center;
+  }
+
+  .contact-list {
+    margin: 10px auto 0;
+  }
+
+  .contact-form button {
+    justify-self: start;
   }
 
   footer {
