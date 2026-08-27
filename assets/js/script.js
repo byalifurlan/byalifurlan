@@ -271,6 +271,16 @@ function markAutoplayBlocked(video, blocked) {
   updateVideoButtonState(video);
 }
 
+function isPlaybackBlockedError(error) {
+  const errorName = typeof error?.name === "string" ? error.name : "";
+
+  if (errorName === "NotAllowedError" || errorName === "NotSupportedError") {
+    return true;
+  }
+
+  return false;
+}
+
 function getHeroViewportWidth() {
   return Math.round(window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth || 0);
 }
@@ -374,7 +384,7 @@ function playManagedVideo(video, { withSound = false, userInitiated = false } = 
       syncAllVideoButtons();
       return true;
     })
-    .catch(() => {
+    .catch((error) => {
       state.playAttempt = null;
 
       if (wantsSound) {
@@ -383,7 +393,7 @@ function playManagedVideo(video, { withSound = false, userInitiated = false } = 
         setVideoMutedState(video, true);
       }
 
-      markAutoplayBlocked(video, !reduceMotion.matches || userInitiated);
+      markAutoplayBlocked(video, isPlaybackBlockedError(error) || userInitiated);
       syncAllVideoButtons();
       return false;
     });
