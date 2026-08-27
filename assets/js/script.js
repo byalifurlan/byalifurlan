@@ -13,8 +13,8 @@ const testimonialNext = document.querySelector("[data-testimonial-next]");
 const ambientVideos = Array.from(document.querySelectorAll("[data-ambient-video]"));
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const heroVideo = document.querySelector("[data-hero-video]");
-const heroVideoMobile = window.matchMedia("(max-width: 768px)");
 const ambientVideoState = new WeakMap();
+const heroMobileBreakpoint = 768;
 
 function updateHeader() {
   if (header.classList.contains("work-header")) {
@@ -240,21 +240,31 @@ function playAmbientVideo(video) {
   return state.playAttempt;
 }
 
+function getHeroViewportWidth() {
+  return Math.round(window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth || 0);
+}
+
+function getHeroSourceConfig() {
+  if (!heroVideo) {
+    return null;
+  }
+
+  const viewportWidth = getHeroViewportWidth();
+  const isMobile = viewportWidth <= heroMobileBreakpoint;
+
+  return {
+    isMobile,
+    source: isMobile ? heroVideo.dataset.mobileSrc : heroVideo.dataset.desktopSrc,
+  };
+}
+
 function updateHeroVideoSource() {
   if (!heroVideo) {
     return;
   }
 
-  const nextSrc = heroVideoMobile.matches
-    ? heroVideo.dataset.mobileSrc
-    : heroVideo.dataset.desktopSrc;
-  const nextPoster = heroVideoMobile.matches
-    ? heroVideo.dataset.mobilePoster
-    : heroVideo.dataset.desktopPoster;
-
-  if (nextPoster) {
-    heroVideo.poster = nextPoster;
-  }
+  const config = getHeroSourceConfig();
+  const nextSrc = config?.source;
 
   if (reduceMotion.matches) {
     stopAmbientVideo(heroVideo, { reset: true });
@@ -269,7 +279,7 @@ function updateHeroVideoSource() {
   heroVideo.preload = "auto";
   prepareAmbientVideo(heroVideo);
 
-  if (heroVideo.getAttribute("src") !== nextSrc) {
+  if (nextSrc && heroVideo.getAttribute("src") !== nextSrc) {
     heroVideo.src = nextSrc;
     heroVideo.load();
   }
@@ -291,7 +301,8 @@ if (heroVideo) {
   heroVideo.addEventListener("loadeddata", handleHeroReady);
   heroVideo.addEventListener("canplay", handleHeroReady);
   updateHeroVideoSource();
-  heroVideoMobile.addEventListener("change", updateHeroVideoSource);
+  window.addEventListener("resize", updateHeroVideoSource, { passive: true });
+  window.visualViewport?.addEventListener("resize", updateHeroVideoSource, { passive: true });
   reduceMotion.addEventListener("change", updateHeroVideoSource);
 }
 
