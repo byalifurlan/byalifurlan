@@ -3,8 +3,6 @@ const nav = document.querySelector("[data-nav]");
 const menuToggle = document.querySelector("[data-menu-toggle]");
 const form = document.querySelector("[data-contact-form]");
 const formStatus = document.querySelector("[data-form-status]");
-const filterButtons = document.querySelectorAll("[data-filter]");
-const workCards = document.querySelectorAll("[data-category]");
 const testimonialTrack = document.querySelector("[data-testimonial-track]");
 const testimonialSlides = document.querySelectorAll("[data-testimonial-slide]");
 const testimonialDots = document.querySelector("[data-testimonial-dots]");
@@ -565,11 +563,6 @@ function updateAmbientVideos() {
 }
 
 function isPortfolioVideoVisible(video) {
-  const card = video.closest(".work-video-card");
-  if (card?.classList.contains("is-hidden")) {
-    return false;
-  }
-
   const rect = video.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
   const visibleHeight = Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0);
@@ -665,40 +658,6 @@ function primePortfolioVideo(video) {
 }
 
 managedVideos.forEach((video) => insertVideoControls(video));
-
-if (filterButtons.length && workCards.length) {
-  filterButtons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.classList.contains("is-active")));
-  });
-
-  filterButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const filter = button.dataset.filter;
-
-      filterButtons.forEach((item) => {
-        item.classList.toggle("is-active", item === button);
-        item.setAttribute("aria-pressed", String(item === button));
-      });
-
-      workCards.forEach((card) => {
-        const isVisible = filter === "all" || card.dataset.category === filter;
-        card.classList.toggle("is-hidden", !isVisible);
-
-        const video = card.querySelector("[data-portfolio-video]");
-        if (!video) {
-          return;
-        }
-
-        if (!isVisible) {
-          stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
-          return;
-        }
-
-        updatePortfolioVideo(video);
-      });
-    });
-  });
-}
 
 if (heroVideo) {
   heroVideo.addEventListener("loadeddata", handleHeroReady);

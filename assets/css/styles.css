@@ -1189,85 +1189,38 @@ footer {
   padding-bottom: clamp(72px, 9vw, 120px);
 }
 
-.work-filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 28px;
+.work-library-heading {
+  max-width: 640px;
+  margin-bottom: 34px;
 }
 
-.work-filter-row button {
-  display: inline-flex;
-  align-items: center;
-  min-height: 38px;
-  padding: 0 16px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #f7f4ef;
-  color: var(--ink);
-  font-size: 0.82rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+.work-library-heading h1 {
+  margin-bottom: 16px;
+  font-size: clamp(2.4rem, 4vw, 4.2rem);
 }
 
-.work-filter-row button:hover,
-.work-filter-row button:focus-visible {
-  border-color: rgba(18, 61, 52, 0.4);
-}
-
-.work-filter-row button.is-active {
-  background: var(--green);
-  border-color: var(--green);
-  color: white;
-}
-
-.work-video-card.is-hidden {
-  display: none;
+.work-library-heading p:last-child {
+  max-width: 34rem;
+  margin-bottom: 0;
+  color: var(--muted);
 }
 
 .work-video-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 22px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
 }
 
 .work-video-card {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  position: relative;
+  min-width: 0;
 }
 
 .work-video-shell {
   position: relative;
   overflow: hidden;
-}
-
-.work-video-card div {
-  padding: 18px 18px 20px;
-}
-
-.work-video-card span {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--green);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
-.work-video-card h3 {
-  margin-bottom: 8px;
-  font-family: var(--serif);
-  font-size: 1.35rem;
-  line-height: 1.05;
-}
-
-.work-video-card p {
-  margin-bottom: 0;
-  color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
+  background: #171411;
 }
 
 .work-cta {
@@ -1380,9 +1333,12 @@ footer {
   .portfolio-grid,
   .social-grid,
   .social-video-grid,
-  .work-video-grid,
   .process-grid,
   .faq-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .work-video-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1599,7 +1555,6 @@ footer {
   .portfolio-grid,
   .social-grid,
   .social-video-grid,
-  .work-video-grid,
   .process-grid,
   .faq-grid,
   .contact-form {
@@ -1610,9 +1565,28 @@ footer {
     width: min(100% - 32px, 1180px);
   }
 
+  .work-library-heading {
+    margin-bottom: 30px;
+    text-align: center;
+  }
+
+  .work-library-heading p:last-child {
+    margin-inline: auto;
+  }
+
   .work-feature {
     width: min(100% - 32px, 1180px);
     padding: 124px 0 64px;
+  }
+
+  .work-video-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    justify-items: center;
+  }
+
+  .work-video-card {
+    width: min(100%, 320px);
   }
 
   .service-grid article {
