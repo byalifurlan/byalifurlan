@@ -1350,6 +1350,10 @@ footer {
     padding-top: 150px;
   }
 
+  .home-reel-video {
+    justify-self: center;
+  }
+
   h1 {
     font-size: clamp(4rem, 17vw, 5.4rem);
   }
