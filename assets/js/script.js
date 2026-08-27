@@ -12,12 +12,29 @@ const testimonialPrev = document.querySelector("[data-testimonial-prev]");
 const testimonialNext = document.querySelector("[data-testimonial-next]");
 const ambientVideos = Array.from(document.querySelectorAll("[data-ambient-video]"));
 const portfolioVideos = Array.from(document.querySelectorAll("[data-portfolio-video]"));
+const managedVideos = Array.from(new Set([...ambientVideos, ...portfolioVideos]));
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const heroVideo = document.querySelector("[data-hero-video]");
 const ambientVideoState = new WeakMap();
 const heroMobileBreakpoint = 768;
+const sharedAudioState = {
+  audibleVideo: null,
+};
+
+function addMediaQueryListener(mediaQueryList, handler) {
+  if (typeof mediaQueryList.addEventListener === "function") {
+    mediaQueryList.addEventListener("change", handler);
+    return;
+  }
+
+  mediaQueryList.addListener(handler);
+}
 
 function updateHeader() {
+  if (!header) {
+    return;
+  }
+
   if (header.classList.contains("work-header")) {
     header.classList.add("is-scrolled");
     return;
@@ -140,117 +157,118 @@ if (testimonialTrack && testimonialSlides.length && testimonialPrev && testimoni
   showTestimonial(0);
 }
 
-if (filterButtons.length && workCards.length) {
-  filterButtons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.classList.contains("is-active")));
-  });
-
-  filterButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      const filter = button.dataset.filter;
-
-      filterButtons.forEach((item) => {
-        item.classList.toggle("is-active", item === button);
-        item.setAttribute("aria-pressed", String(item === button));
-      });
-
-      workCards.forEach((card) => {
-        const isVisible = filter === "all" || card.dataset.category === filter;
-        card.classList.toggle("is-hidden", !isVisible);
-
-        const video = card.querySelector("[data-portfolio-video]");
-        if (!video) {
-          return;
-        }
-
-        if (!isVisible) {
-          if (video) {
-            stopAmbientVideo(video, { reset: true });
-          }
-          return;
-        }
-
-        updatePortfolioVideo(video);
-      });
-    });
-  });
-}
-
 function ensureAmbientVideoState(video) {
   if (!ambientVideoState.has(video)) {
-    ambientVideoState.set(video, { playAttempt: null, hasPlayed: false });
+    ambientVideoState.set(video, {
+      autoplayBlocked: false,
+      controls: null,
+      hasPlayed: false,
+      playAttempt: null,
+      playButton: null,
+      readyHandlerAttached: false,
+      soundButton: null,
+    });
   }
 
   return ambientVideoState.get(video);
 }
 
-function prepareAmbientVideo(video) {
-  video.defaultMuted = true;
-  video.muted = true;
+function isAudioCapableVideo(video) {
+  return video.dataset.audioCapable !== "false";
+}
+
+function isAudibleVideo(video) {
+  return sharedAudioState.audibleVideo === video && !video.muted;
+}
+
+function setVideoMutedState(video, shouldMute) {
+  video.muted = shouldMute;
+  video.defaultMuted = shouldMute;
+
+  if (shouldMute) {
+    video.setAttribute("muted", "");
+    return;
+  }
+
+  video.removeAttribute("muted");
+}
+
+function prepareAmbientVideo(video, { withSound = false } = {}) {
+  const allowSound = withSound && isAudioCapableVideo(video);
+  const shouldMute = !allowSound;
+
   video.playsInline = true;
-  video.loop = true;
   video.autoplay = true;
-  video.preload = "metadata";
-  video.setAttribute("muted", "");
+  video.loop = true;
+  video.preload = video === heroVideo ? "auto" : "metadata";
   video.setAttribute("playsinline", "");
-  video.setAttribute("loop", "");
   video.setAttribute("autoplay", "");
-  video.setAttribute("preload", "metadata");
+  video.setAttribute("loop", "");
+  video.setAttribute("preload", video === heroVideo ? "auto" : "metadata");
+  video.controls = false;
+  video.removeAttribute("controls");
+  setVideoMutedState(video, shouldMute);
+}
 
-  if (!video.hasAttribute("controls")) {
-    video.controls = false;
-    video.removeAttribute("controls");
+function updateVideoButtonState(video) {
+  const state = ensureAmbientVideoState(video);
+  const soundButton = state.soundButton;
+  const playButton = state.playButton;
+  const audioCapable = isAudioCapableVideo(video);
+
+  if (soundButton) {
+    if (!audioCapable) {
+      soundButton.textContent = "No Audio";
+      soundButton.disabled = true;
+      soundButton.classList.add("is-disabled");
+      soundButton.setAttribute("aria-label", "Audio is not available for this video");
+      soundButton.setAttribute("aria-pressed", "false");
+    } else {
+      const isOn = isAudibleVideo(video);
+      soundButton.disabled = false;
+      soundButton.classList.remove("is-disabled");
+      soundButton.textContent = isOn ? "Mute" : "Sound On";
+      soundButton.setAttribute("aria-label", isOn ? "Mute video" : "Turn sound on");
+      soundButton.setAttribute("aria-pressed", isOn ? "true" : "false");
+      soundButton.classList.toggle("is-on", isOn);
+    }
+  }
+
+  if (playButton) {
+    playButton.hidden = !state.autoplayBlocked;
   }
 }
 
-function stopAmbientVideo(video, { reset = false } = {}) {
-  const state = ensureAmbientVideoState(video);
-  state.playAttempt = null;
-  video.pause();
-
-  if (reset) {
-    video.currentTime = 0;
-  }
+function syncAllVideoButtons() {
+  managedVideos.forEach((video) => updateVideoButtonState(video));
 }
 
-function playAmbientVideo(video) {
-  if (reduceMotion.matches) {
-    return Promise.resolve(false);
+function clearAudibleVideo(video = sharedAudioState.audibleVideo) {
+  if (!video) {
+    return;
   }
 
+  if (sharedAudioState.audibleVideo === video) {
+    sharedAudioState.audibleVideo = null;
+  }
+
+  setVideoMutedState(video, true);
+}
+
+function muteAllOtherVideos(activeVideo = null) {
+  managedVideos.forEach((video) => {
+    if (video === activeVideo) {
+      return;
+    }
+
+    setVideoMutedState(video, true);
+  });
+}
+
+function markAutoplayBlocked(video, blocked) {
   const state = ensureAmbientVideoState(video);
-  prepareAmbientVideo(video);
-
-  if (!video.getAttribute("src") && video.querySelector("source")?.src) {
-    video.load();
-  }
-
-  if (state.playAttempt) {
-    return state.playAttempt;
-  }
-
-  const playResult = video.play();
-
-  if (!playResult || typeof playResult.then !== "function") {
-    state.hasPlayed = !video.paused;
-    return Promise.resolve(state.hasPlayed);
-  }
-
-  state.playAttempt = playResult
-    .then(() => {
-      state.playAttempt = null;
-      state.hasPlayed = true;
-      if (video !== heroVideo && !video.hasAttribute("data-portfolio-video")) {
-        video.removeAttribute("poster");
-      }
-      return true;
-    })
-    .catch(() => {
-      state.playAttempt = null;
-      return false;
-    });
-
-  return state.playAttempt;
+  state.autoplayBlocked = blocked;
+  updateVideoButtonState(video);
 }
 
 function getHeroViewportWidth() {
@@ -267,8 +285,224 @@ function getHeroSourceConfig() {
 
   return {
     isMobile,
+    poster: isMobile ? heroVideo.dataset.mobilePoster : heroVideo.dataset.desktopPoster,
     source: isMobile ? heroVideo.dataset.mobileSrc : heroVideo.dataset.desktopSrc,
   };
+}
+
+function stopAmbientVideo(video, { reset = false, clearAudio = false } = {}) {
+  const state = ensureAmbientVideoState(video);
+  state.playAttempt = null;
+  video.pause();
+
+  if (reset) {
+    video.currentTime = 0;
+  }
+
+  if (clearAudio && sharedAudioState.audibleVideo === video) {
+    clearAudibleVideo(video);
+    syncAllVideoButtons();
+  } else {
+    updateVideoButtonState(video);
+  }
+}
+
+function ensureBaseVideoSource(video) {
+  if (video === heroVideo) {
+    const config = getHeroSourceConfig();
+    const nextSrc = config?.source;
+    const nextPoster = config?.poster;
+
+    if (nextPoster && heroVideo.getAttribute("poster") !== nextPoster) {
+      heroVideo.setAttribute("poster", nextPoster);
+    }
+
+    if (nextSrc && heroVideo.getAttribute("src") !== nextSrc) {
+      heroVideo.src = nextSrc;
+      heroVideo.load();
+    }
+
+    return Boolean(nextSrc);
+  }
+
+  const sourceElement = video.querySelector("source");
+  if (!video.getAttribute("src") && sourceElement?.src) {
+    video.load();
+  }
+
+  return true;
+}
+
+function playManagedVideo(video, { withSound = false, userInitiated = false } = {}) {
+  const wantsSound = withSound && isAudioCapableVideo(video);
+
+  if (reduceMotion.matches && !userInitiated) {
+    markAutoplayBlocked(video, false);
+    return Promise.resolve(false);
+  }
+
+  const state = ensureAmbientVideoState(video);
+
+  if (wantsSound) {
+    muteAllOtherVideos(video);
+    sharedAudioState.audibleVideo = video;
+  } else if (sharedAudioState.audibleVideo === video) {
+    sharedAudioState.audibleVideo = null;
+  }
+
+  prepareAmbientVideo(video, { withSound: wantsSound });
+  ensureBaseVideoSource(video);
+
+  if (state.playAttempt) {
+    return state.playAttempt;
+  }
+
+  const playResult = video.play();
+
+  if (!playResult || typeof playResult.then !== "function") {
+    state.hasPlayed = !video.paused;
+    markAutoplayBlocked(video, false);
+    syncAllVideoButtons();
+    return Promise.resolve(state.hasPlayed);
+  }
+
+  state.playAttempt = playResult
+    .then(() => {
+      state.playAttempt = null;
+      state.hasPlayed = true;
+      markAutoplayBlocked(video, false);
+      syncAllVideoButtons();
+      return true;
+    })
+    .catch(() => {
+      state.playAttempt = null;
+
+      if (wantsSound) {
+        clearAudibleVideo(video);
+      } else {
+        setVideoMutedState(video, true);
+      }
+
+      markAutoplayBlocked(video, !reduceMotion.matches || userInitiated);
+      syncAllVideoButtons();
+      return false;
+    });
+
+  return state.playAttempt;
+}
+
+function ensureVideoShell(video) {
+  const immediateParent = video.parentElement;
+
+  if (video === heroVideo) {
+    const shell = video.closest(".hero");
+    shell?.classList.add("video-control-shell");
+    return shell;
+  }
+
+  if (immediateParent?.matches(".home-reel-video, .social-video-card, .cta-video-card, .video-control-shell")) {
+    immediateParent.classList.add("video-control-shell");
+    return immediateParent;
+  }
+
+  const workCard = video.closest(".work-video-card");
+  if (workCard) {
+    const shell = document.createElement("div");
+    shell.className = "video-control-shell work-video-shell";
+    workCard.insertBefore(shell, video);
+    shell.append(video);
+    return shell;
+  }
+
+  if (immediateParent?.classList.contains("cta-images")) {
+    const shell = document.createElement("div");
+    shell.className = "cta-video-card video-control-shell";
+    immediateParent.insertBefore(shell, video);
+    shell.append(video);
+    return shell;
+  }
+
+  immediateParent?.classList.add("video-control-shell");
+  return immediateParent;
+}
+
+function enableVideoSound(video) {
+  if (!isAudioCapableVideo(video)) {
+    return;
+  }
+
+  muteAllOtherVideos(video);
+  sharedAudioState.audibleVideo = video;
+  prepareAmbientVideo(video, { withSound: true });
+  ensureBaseVideoSource(video);
+
+  if (!video.paused && video.readyState >= 2) {
+    setVideoMutedState(video, false);
+    markAutoplayBlocked(video, false);
+    syncAllVideoButtons();
+    return;
+  }
+
+  playManagedVideo(video, { withSound: true, userInitiated: true });
+}
+
+function muteVideoSound(video) {
+  clearAudibleVideo(video);
+  prepareAmbientVideo(video, { withSound: false });
+  syncAllVideoButtons();
+}
+
+function insertVideoControls(video) {
+  const state = ensureAmbientVideoState(video);
+  if (state.controls) {
+    return;
+  }
+
+  const shell = ensureVideoShell(video);
+  if (!shell) {
+    return;
+  }
+
+  const controls = document.createElement("div");
+  controls.className = "video-controls";
+  controls.setAttribute("role", "group");
+  controls.setAttribute("aria-label", "Video controls");
+
+  const playButton = document.createElement("button");
+  playButton.type = "button";
+  playButton.className = "video-control video-control-play";
+  playButton.textContent = "Play";
+  playButton.setAttribute("aria-label", "Play video");
+  playButton.hidden = true;
+  playButton.addEventListener("click", () => {
+    const shouldKeepSound = isAudibleVideo(video) && isAudioCapableVideo(video);
+    playManagedVideo(video, { withSound: shouldKeepSound, userInitiated: true });
+  });
+
+  const soundButton = document.createElement("button");
+  soundButton.type = "button";
+  soundButton.className = "video-control video-control-sound";
+  soundButton.addEventListener("click", () => {
+    if (!isAudioCapableVideo(video)) {
+      return;
+    }
+
+    if (isAudibleVideo(video)) {
+      muteVideoSound(video);
+      return;
+    }
+
+    enableVideoSound(video);
+  });
+
+  controls.append(playButton, soundButton);
+  shell.append(controls);
+
+  state.controls = controls;
+  state.playButton = playButton;
+  state.soundButton = soundButton;
+
+  updateVideoButtonState(video);
 }
 
 function updateHeroVideoSource() {
@@ -277,11 +511,16 @@ function updateHeroVideoSource() {
   }
 
   const config = getHeroSourceConfig();
-  const nextSrc = config?.source;
+  const nextPoster = config?.poster;
+
+  if (nextPoster && heroVideo.getAttribute("poster") !== nextPoster) {
+    heroVideo.setAttribute("poster", nextPoster);
+  }
 
   if (reduceMotion.matches) {
-    stopAmbientVideo(heroVideo, { reset: true });
+    stopAmbientVideo(heroVideo, { reset: true, clearAudio: true });
     heroVideo.preload = "none";
+    heroVideo.setAttribute("preload", "none");
     if (heroVideo.getAttribute("src")) {
       heroVideo.removeAttribute("src");
       heroVideo.load();
@@ -289,16 +528,11 @@ function updateHeroVideoSource() {
     return;
   }
 
-  heroVideo.preload = "auto";
-  prepareAmbientVideo(heroVideo);
-
-  if (nextSrc && heroVideo.getAttribute("src") !== nextSrc) {
-    heroVideo.src = nextSrc;
-    heroVideo.load();
-  }
+  prepareAmbientVideo(heroVideo, { withSound: isAudibleVideo(heroVideo) });
+  ensureBaseVideoSource(heroVideo);
 
   if (heroVideo.readyState >= 2) {
-    playAmbientVideo(heroVideo);
+    playManagedVideo(heroVideo, { withSound: false });
   }
 }
 
@@ -307,90 +541,17 @@ function handleHeroReady() {
     return;
   }
 
-  playAmbientVideo(heroVideo);
-}
-
-if (heroVideo) {
-  heroVideo.addEventListener("loadeddata", handleHeroReady);
-  heroVideo.addEventListener("canplay", handleHeroReady);
-  updateHeroVideoSource();
-  window.addEventListener("resize", updateHeroVideoSource, { passive: true });
-  window.visualViewport?.addEventListener("resize", updateHeroVideoSource, { passive: true });
-  reduceMotion.addEventListener("change", updateHeroVideoSource);
+  playManagedVideo(heroVideo, { withSound: false });
 }
 
 function updateAmbientVideos() {
   ambientVideos.forEach((video) => {
     if (reduceMotion.matches) {
-      stopAmbientVideo(video, { reset: video === heroVideo });
+      stopAmbientVideo(video, { reset: video === heroVideo, clearAudio: video === sharedAudioState.audibleVideo });
     } else {
-      prepareAmbientVideo(video);
+      prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
     }
   });
-}
-
-if (ambientVideos.length && "IntersectionObserver" in window) {
-  const ambientVideoObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        const video = entry.target;
-
-        if (reduceMotion.matches) {
-          stopAmbientVideo(video, { reset: video === heroVideo });
-          return;
-        }
-
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
-          playAmbientVideo(video);
-          return;
-        }
-
-        stopAmbientVideo(video);
-      });
-    },
-    {
-      threshold: [0, 0.15, 0.35, 0.6],
-      rootMargin: "0px 0px 12% 0px",
-    }
-  );
-
-  ambientVideos.forEach((video) => {
-    if (reduceMotion.matches) {
-      stopAmbientVideo(video, { reset: video === heroVideo });
-    } else {
-      prepareAmbientVideo(video);
-      ambientVideoObserver.observe(video);
-      if (video === heroVideo) {
-        playAmbientVideo(video);
-      }
-    }
-  });
-
-  reduceMotion.addEventListener("change", () => {
-    ambientVideos.forEach((video) => {
-      if (reduceMotion.matches) {
-        ambientVideoObserver.unobserve(video);
-        stopAmbientVideo(video, { reset: video === heroVideo });
-      } else {
-        prepareAmbientVideo(video);
-        ambientVideoObserver.observe(video);
-        if (video === heroVideo) {
-          playAmbientVideo(video);
-        }
-      }
-    });
-  });
-} else if (ambientVideos.length) {
-  ambientVideos.forEach((video) => {
-    if (reduceMotion.matches) {
-      stopAmbientVideo(video, { reset: video === heroVideo });
-    } else {
-      prepareAmbientVideo(video);
-      playAmbientVideo(video);
-    }
-  });
-
-  reduceMotion.addEventListener("change", updateAmbientVideos);
 }
 
 function isPortfolioVideoVisible(video) {
@@ -443,7 +604,7 @@ function bindPortfolioReadyPlayback(video) {
     video.removeEventListener("canplay", handleReady);
 
     if (isPortfolioVideoVisible(video) && !reduceMotion.matches) {
-      playAmbientVideo(video);
+      playManagedVideo(video, { withSound: isAudibleVideo(video) });
     }
   };
 
@@ -458,11 +619,11 @@ function shouldPrimePortfolioVideo(entry) {
 
 function updatePortfolioVideo(video) {
   if (reduceMotion.matches) {
-    stopAmbientVideo(video, { reset: true });
+    stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
     return;
   }
 
-  prepareAmbientVideo(video);
+  prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
 
   if (isPortfolioVideoVisible(video)) {
     if (!ensurePortfolioVideoSource(video)) {
@@ -470,7 +631,7 @@ function updatePortfolioVideo(video) {
     }
 
     if (video.readyState >= 2) {
-      playAmbientVideo(video);
+      playManagedVideo(video, { withSound: isAudibleVideo(video) });
     } else {
       bindPortfolioReadyPlayback(video);
     }
@@ -485,12 +646,121 @@ function primePortfolioVideo(video) {
     return;
   }
 
-  prepareAmbientVideo(video);
+  prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
   ensurePortfolioVideoSource(video);
 
   if (isPortfolioVideoVisible(video)) {
     updatePortfolioVideo(video);
   }
+}
+
+managedVideos.forEach((video) => insertVideoControls(video));
+
+if (filterButtons.length && workCards.length) {
+  filterButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.classList.contains("is-active")));
+  });
+
+  filterButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const filter = button.dataset.filter;
+
+      filterButtons.forEach((item) => {
+        item.classList.toggle("is-active", item === button);
+        item.setAttribute("aria-pressed", String(item === button));
+      });
+
+      workCards.forEach((card) => {
+        const isVisible = filter === "all" || card.dataset.category === filter;
+        card.classList.toggle("is-hidden", !isVisible);
+
+        const video = card.querySelector("[data-portfolio-video]");
+        if (!video) {
+          return;
+        }
+
+        if (!isVisible) {
+          stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
+          return;
+        }
+
+        updatePortfolioVideo(video);
+      });
+    });
+  });
+}
+
+if (heroVideo) {
+  heroVideo.addEventListener("loadeddata", handleHeroReady);
+  heroVideo.addEventListener("canplay", handleHeroReady);
+  updateHeroVideoSource();
+  window.addEventListener("resize", updateHeroVideoSource, { passive: true });
+  window.visualViewport?.addEventListener("resize", updateHeroVideoSource, { passive: true });
+  addMediaQueryListener(reduceMotion, updateHeroVideoSource);
+}
+
+if (ambientVideos.length && "IntersectionObserver" in window) {
+  const ambientVideoObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const video = entry.target;
+
+        if (reduceMotion.matches) {
+          stopAmbientVideo(video, { reset: video === heroVideo, clearAudio: video === sharedAudioState.audibleVideo });
+          return;
+        }
+
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+          playManagedVideo(video, { withSound: isAudibleVideo(video) });
+          return;
+        }
+
+        stopAmbientVideo(video);
+      });
+    },
+    {
+      threshold: [0, 0.15, 0.35, 0.6],
+      rootMargin: "0px 0px 12% 0px",
+    }
+  );
+
+  ambientVideos.forEach((video) => {
+    if (reduceMotion.matches) {
+      stopAmbientVideo(video, { reset: video === heroVideo, clearAudio: video === sharedAudioState.audibleVideo });
+    } else {
+      prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
+      ambientVideoObserver.observe(video);
+      if (video === heroVideo) {
+        playManagedVideo(video, { withSound: false });
+      }
+    }
+  });
+
+  addMediaQueryListener(reduceMotion, () => {
+    ambientVideos.forEach((video) => {
+      if (reduceMotion.matches) {
+        ambientVideoObserver.unobserve(video);
+        stopAmbientVideo(video, { reset: video === heroVideo, clearAudio: video === sharedAudioState.audibleVideo });
+      } else {
+        prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
+        ambientVideoObserver.observe(video);
+        if (video === heroVideo) {
+          playManagedVideo(video, { withSound: false });
+        }
+      }
+    });
+  });
+} else if (ambientVideos.length) {
+  ambientVideos.forEach((video) => {
+    if (reduceMotion.matches) {
+      stopAmbientVideo(video, { reset: video === heroVideo, clearAudio: video === sharedAudioState.audibleVideo });
+    } else {
+      prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
+      playManagedVideo(video, { withSound: isAudibleVideo(video) });
+    }
+  });
+
+  addMediaQueryListener(reduceMotion, updateAmbientVideos);
 }
 
 if (portfolioVideos.length && "IntersectionObserver" in window) {
@@ -500,7 +770,7 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
         const video = entry.target;
 
         if (reduceMotion.matches) {
-          stopAmbientVideo(video, { reset: true });
+          stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
           return;
         }
 
@@ -524,9 +794,9 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
 
   portfolioVideos.forEach((video) => {
     if (reduceMotion.matches) {
-      stopAmbientVideo(video, { reset: true });
+      stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
     } else {
-      prepareAmbientVideo(video);
+      prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
       portfolioVideoObserver.observe(video);
     }
   });
@@ -539,13 +809,13 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
     { passive: true }
   );
 
-  reduceMotion.addEventListener("change", () => {
+  addMediaQueryListener(reduceMotion, () => {
     portfolioVideos.forEach((video) => {
       if (reduceMotion.matches) {
         portfolioVideoObserver.unobserve(video);
-        stopAmbientVideo(video, { reset: true });
+        stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
       } else {
-        prepareAmbientVideo(video);
+        prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
         portfolioVideoObserver.observe(video);
         updatePortfolioVideo(video);
       }
@@ -555,9 +825,9 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
   const syncPortfolioVideos = () => {
     portfolioVideos.forEach((video) => {
       if (reduceMotion.matches) {
-        stopAmbientVideo(video, { reset: true });
+        stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
       } else {
-        prepareAmbientVideo(video);
+        prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
         updatePortfolioVideo(video);
       }
     });
@@ -566,5 +836,7 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
   syncPortfolioVideos();
   window.addEventListener("scroll", syncPortfolioVideos, { passive: true });
   window.addEventListener("resize", syncPortfolioVideos, { passive: true });
-  reduceMotion.addEventListener("change", syncPortfolioVideos);
+  addMediaQueryListener(reduceMotion, syncPortfolioVideos);
 }
+
+syncAllVideoButtons();
