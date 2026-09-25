@@ -244,26 +244,19 @@ function updateVideoButtonState(video) {
   const audioCapable = isAudioCapableVideo(video);
 
   if (soundButton) {
-    if (!audioCapable) {
-      soundButton.textContent = "No Audio";
-      soundButton.disabled = true;
-      soundButton.classList.add("is-disabled");
-      soundButton.setAttribute("aria-label", "Audio is not available for this video");
-      soundButton.setAttribute("aria-pressed", "false");
-    } else {
-      const isOn = isAudibleVideo(video);
-      soundButton.disabled = false;
-      soundButton.classList.remove("is-disabled");
-      soundButton.textContent = isOn ? "Mute" : "Sound On";
-      soundButton.setAttribute("aria-label", isOn ? "Mute video" : "Turn sound on");
-      soundButton.setAttribute("aria-pressed", isOn ? "true" : "false");
-      soundButton.classList.toggle("is-on", isOn);
-    }
+    const isOn = audioCapable && !video.muted;
+    const controlLabel = isOn ? "Mute video" : "Turn sound on";
+
+    soundButton.setAttribute("aria-label", controlLabel);
+    soundButton.setAttribute("title", controlLabel);
+    soundButton.setAttribute("aria-pressed", isOn ? "true" : "false");
+    soundButton.classList.toggle("is-on", isOn);
   }
 
   if (playButton) {
     const isPlaying = !video.paused && !video.ended && !video.error;
-    const shouldShowPlayButton = state.isInViewport || state.autoplayBlocked;
+    const isPortfolioVideo = video.hasAttribute("data-portfolio-video");
+    const shouldShowPlayButton = isPortfolioVideo || state.isInViewport || state.autoplayBlocked;
     const controlLabel = isPlaying ? "Pause video" : "Play video";
 
     playButton.hidden = !shouldShowPlayButton;
@@ -584,6 +577,12 @@ function insertVideoControls(video) {
     soundButton = document.createElement("button");
     soundButton.type = "button";
     soundButton.className = "video-control video-control-sound";
+    soundButton.innerHTML = `
+      <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <path d="M3.5 8h3l3.75-3v10L6.5 12h-3V8Z"></path>
+        <path class="video-control-icon-sound-on" d="M13 7.15a4 4 0 0 1 0 5.7M15.25 5a7 7 0 0 1 0 10"></path>
+        <path class="video-control-icon-muted" d="m13 7.25 4 5.5m0-5.5-4 5.5"></path>
+      </svg>`;
     soundButton.addEventListener("click", () => {
       if (isAudibleVideo(video)) {
         muteVideoSound(video);
@@ -605,7 +604,7 @@ function insertVideoControls(video) {
   state.playButton = playButton;
   state.soundButton = soundButton;
 
-  ["play", "playing", "pause", "ended", "error"].forEach((eventName) => {
+  ["play", "playing", "pause", "ended", "error", "volumechange"].forEach((eventName) => {
     video.addEventListener(eventName, () => updateVideoButtonState(video));
   });
 
