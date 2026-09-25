@@ -64,6 +64,18 @@ if (nav && header && menuToggle) {
       menuToggle.setAttribute("aria-label", "Open menu");
     }
   });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !nav.classList.contains("is-open")) {
+      return;
+    }
+
+    nav.classList.remove("is-open");
+    header.classList.remove("is-open");
+    menuToggle.setAttribute("aria-expanded", "false");
+    menuToggle.setAttribute("aria-label", "Open menu");
+    menuToggle.focus();
+  });
 }
 
 function setFormStatus(message, tone = "success") {
@@ -234,6 +246,10 @@ function updateVideoButtonState(video) {
 
   if (playButton) {
     playButton.hidden = !state.autoplayBlocked;
+  }
+
+  if (state.controls) {
+    state.controls.hidden = !soundButton && !state.autoplayBlocked;
   }
 }
 
@@ -408,7 +424,7 @@ function ensureVideoShell(video) {
     return shell;
   }
 
-  if (immediateParent?.matches(".home-reel-video, .social-video-card, .cta-video-card, .video-control-shell")) {
+  if (immediateParent?.matches(".home-reel-video, .cta-video-card, .video-control-shell")) {
     immediateParent.classList.add("video-control-shell");
     return immediateParent;
   }
@@ -487,23 +503,27 @@ function insertVideoControls(video) {
     playManagedVideo(video, { withSound: shouldKeepSound, userInitiated: true });
   });
 
-  const soundButton = document.createElement("button");
-  soundButton.type = "button";
-  soundButton.className = "video-control video-control-sound";
-  soundButton.addEventListener("click", () => {
-    if (!isAudioCapableVideo(video)) {
-      return;
-    }
+  let soundButton = null;
 
-    if (isAudibleVideo(video)) {
-      muteVideoSound(video);
-      return;
-    }
+  if (isAudioCapableVideo(video)) {
+    soundButton = document.createElement("button");
+    soundButton.type = "button";
+    soundButton.className = "video-control video-control-sound";
+    soundButton.addEventListener("click", () => {
+      if (isAudibleVideo(video)) {
+        muteVideoSound(video);
+        return;
+      }
 
-    enableVideoSound(video);
-  });
+      enableVideoSound(video);
+    });
+  }
 
-  controls.append(playButton, soundButton);
+  controls.append(playButton);
+
+  if (soundButton) {
+    controls.append(soundButton);
+  }
   shell.append(controls);
 
   state.controls = controls;

@@ -40,4 +40,4 @@ Important notes:
 
 - If the final host is Netlify, keep the current form attributes in place.
 - If the final host is not Netlify, replace form handling with a supported backend endpoint or form service.
-- The current hero source is a `.mov` file. For best browser compatibility and page weight, export a web-ready `.mp4` replacement before final launch.
+- The deployable hero uses separate web-ready MP4 files for desktop and mobile. Keep original/master footage outside this folder so it is not published or added to the repository.
