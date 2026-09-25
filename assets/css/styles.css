@@ -419,7 +419,7 @@ h3 {
 
 .cta-video-card .video-control::before {
   position: absolute;
-  inset: 3px;
+  inset: 4px;
   border: 1px solid rgba(255, 255, 255, 0.26);
   border-radius: 50%;
   background: rgba(8, 8, 8, 0.58);
@@ -432,8 +432,8 @@ h3 {
 .cta-video-card .video-control svg {
   position: relative;
   z-index: 1;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 .cta-video-card .video-control:hover,
@@ -778,7 +778,7 @@ h3 {
 .cta-video-card {
   display: block;
   width: 100%;
-  aspect-ratio: 0.72;
+  aspect-ratio: 0.68;
   object-fit: cover;
   border: 0;
   border-radius: 8px;
@@ -795,7 +795,7 @@ h3 {
   display: block;
   width: 100%;
   height: 100%;
-  aspect-ratio: 0.72;
+  aspect-ratio: 0.68;
   object-fit: cover;
 }
 
@@ -949,6 +949,7 @@ h3 {
 @media (max-width: 760px) {
   .service-grid {
     grid-template-columns: 1fr;
+    border-bottom: 0;
   }
 
   .service-grid article,
