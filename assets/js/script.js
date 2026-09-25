@@ -8,6 +8,7 @@ const testimonialSlides = document.querySelectorAll("[data-testimonial-slide]");
 const testimonialDots = document.querySelector("[data-testimonial-dots]");
 const testimonialPrev = document.querySelector("[data-testimonial-prev]");
 const testimonialNext = document.querySelector("[data-testimonial-next]");
+const faqItems = Array.from(document.querySelectorAll("[data-faq-item]"));
 const ambientVideos = Array.from(document.querySelectorAll("[data-ambient-video]"));
 const portfolioVideos = Array.from(document.querySelectorAll("[data-portfolio-video]"));
 const managedVideos = Array.from(new Set([...ambientVideos, ...portfolioVideos]));
@@ -166,6 +167,20 @@ if (testimonialTrack && testimonialSlides.length && testimonialPrev && testimoni
   testimonialNext.addEventListener("click", () => showTestimonial(activeTestimonial + 1));
   showTestimonial(0);
 }
+
+faqItems.forEach((item) => {
+  item.addEventListener("toggle", () => {
+    if (!item.open) {
+      return;
+    }
+
+    faqItems.forEach((otherItem) => {
+      if (otherItem !== item) {
+        otherItem.open = false;
+      }
+    });
+  });
+});
 
 function ensureAmbientVideoState(video) {
   if (!ambientVideoState.has(video)) {
