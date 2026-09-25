@@ -20,6 +20,7 @@ const heroMobileBreakpoint = 768;
 const sharedAudioState = {
   audibleVideo: null,
 };
+const portfolioPlaybackMargin = 300;
 
 function addMediaQueryListener(mediaQueryList, handler) {
   if (typeof mediaQueryList.addEventListener === "function") {
@@ -661,13 +662,11 @@ function updateAmbientVideos() {
   });
 }
 
-function isPortfolioVideoVisible(video) {
+function isPortfolioVideoInPlaybackRange(video) {
   const rect = video.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-  const visibleHeight = Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0);
-  const threshold = Math.min(rect.height * 0.2, 180);
 
-  return visibleHeight > threshold;
+  return rect.bottom >= -portfolioPlaybackMargin && rect.top <= viewportHeight + portfolioPlaybackMargin;
 }
 
 function getPortfolioSourceElement(video) {
@@ -705,7 +704,7 @@ function bindPortfolioReadyPlayback(video) {
     video.removeEventListener("loadeddata", handleReady);
     video.removeEventListener("canplay", handleReady);
 
-    if (isPortfolioVideoVisible(video) && !reduceMotion.matches && !nextState.userPaused) {
+    if (nextState.isInViewport && !reduceMotion.matches && !nextState.userPaused) {
       playManagedVideo(video, { withSound: isAudibleVideo(video) });
     }
   };
@@ -715,22 +714,16 @@ function bindPortfolioReadyPlayback(video) {
   video.addEventListener("canplay", handleReady);
 }
 
-function shouldPrimePortfolioVideo(entry) {
-  return entry.isIntersecting || entry.boundingClientRect.top <= window.innerHeight + 300;
-}
-
-function updatePortfolioVideo(video) {
+function updatePortfolioVideo(video, { shouldPlay = isPortfolioVideoInPlaybackRange(video) } = {}) {
   if (reduceMotion.matches) {
     stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
     return;
   }
 
   prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
+  setVideoViewportState(video, shouldPlay);
 
-  const isVisible = isPortfolioVideoVisible(video);
-  setVideoViewportState(video, isVisible);
-
-  if (isVisible) {
+  if (shouldPlay) {
     if (ensureAmbientVideoState(video).userPaused) {
       return;
     }
@@ -757,10 +750,6 @@ function primePortfolioVideo(video) {
 
   prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
   ensurePortfolioVideoSource(video);
-
-  if (isPortfolioVideoVisible(video)) {
-    updatePortfolioVideo(video);
-  }
 }
 
 controllableVideos.forEach((video) => insertVideoControls(video));
@@ -854,13 +843,9 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
           return;
         }
 
-        if (shouldPrimePortfolioVideo(entry)) {
+        if (entry.isIntersecting) {
           primePortfolioVideo(video);
-        }
-
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.01) {
-          setVideoViewportState(video, true);
-          updatePortfolioVideo(video);
+          updatePortfolioVideo(video, { shouldPlay: true });
           return;
         }
 
@@ -870,7 +855,7 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
     },
     {
       threshold: [0, 0.01, 0.15, 0.35, 0.6],
-      rootMargin: "300px 0px 300px 0px",
+      rootMargin: `${portfolioPlaybackMargin}px 0px ${portfolioPlaybackMargin}px 0px`,
     }
   );
 
@@ -880,6 +865,7 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
     } else {
       prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
       portfolioVideoObserver.observe(video);
+      updatePortfolioVideo(video);
     }
   });
 
