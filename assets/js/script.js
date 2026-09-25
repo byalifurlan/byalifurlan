@@ -14,6 +14,7 @@ const portfolioVideos = Array.from(document.querySelectorAll("[data-portfolio-vi
 const managedVideos = Array.from(new Set([...ambientVideos, ...portfolioVideos]));
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const heroVideo = document.querySelector("[data-hero-video]");
+const controllableVideos = managedVideos.filter((video) => video !== heroVideo);
 const ambientVideoState = new WeakMap();
 const heroMobileBreakpoint = 768;
 const sharedAudioState = {
@@ -762,7 +763,7 @@ function primePortfolioVideo(video) {
   }
 }
 
-managedVideos.forEach((video) => insertVideoControls(video));
+controllableVideos.forEach((video) => insertVideoControls(video));
 
 if (heroVideo) {
   heroVideo.addEventListener("loadeddata", handleHeroReady);
