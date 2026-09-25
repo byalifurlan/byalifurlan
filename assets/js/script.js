@@ -188,10 +188,12 @@ function ensureAmbientVideoState(video) {
       autoplayBlocked: false,
       controls: null,
       hasPlayed: false,
+      isInViewport: false,
       playAttempt: null,
       playButton: null,
       readyHandlerAttached: false,
       soundButton: null,
+      userPaused: false,
     });
   }
 
@@ -260,11 +262,18 @@ function updateVideoButtonState(video) {
   }
 
   if (playButton) {
-    playButton.hidden = !state.autoplayBlocked;
+    const isPlaying = !video.paused && !video.ended && !video.error;
+    const shouldShowPlayButton = state.isInViewport || state.autoplayBlocked;
+    const controlLabel = isPlaying ? "Pause video" : "Play video";
+
+    playButton.hidden = !shouldShowPlayButton;
+    playButton.classList.toggle("is-playing", isPlaying);
+    playButton.setAttribute("aria-label", controlLabel);
+    playButton.setAttribute("title", controlLabel);
   }
 
   if (state.controls) {
-    state.controls.hidden = !soundButton && !state.autoplayBlocked;
+    state.controls.hidden = (!soundButton || soundButton.hidden) && playButton?.hidden;
   }
 }
 
@@ -297,6 +306,12 @@ function muteAllOtherVideos(activeVideo = null) {
 function markAutoplayBlocked(video, blocked) {
   const state = ensureAmbientVideoState(video);
   state.autoplayBlocked = blocked;
+  updateVideoButtonState(video);
+}
+
+function setVideoViewportState(video, isInViewport) {
+  const state = ensureAmbientVideoState(video);
+  state.isInViewport = isInViewport;
   updateVideoButtonState(video);
 }
 
@@ -365,11 +380,33 @@ function ensureBaseVideoSource(video) {
   }
 
   const sourceElement = video.querySelector("source");
-  if (!video.getAttribute("src") && sourceElement?.src) {
+  if (!video.getAttribute("src") && !video.currentSrc && sourceElement?.src) {
     video.load();
   }
 
   return true;
+}
+
+function ensureAudioVideoSource(video) {
+  const audioSrc = video.dataset.audioSrc;
+  const sourceElement = video.querySelector("source");
+
+  if (!audioSrc || !sourceElement || sourceElement.getAttribute("src") === audioSrc) {
+    return;
+  }
+
+  const resumeTime = video.currentTime;
+  const restorePlaybackPosition = () => {
+    video.removeEventListener("loadedmetadata", restorePlaybackPosition);
+
+    if (Number.isFinite(resumeTime) && resumeTime > 0 && Number.isFinite(video.duration)) {
+      video.currentTime = Math.min(resumeTime, Math.max(video.duration - 0.1, 0));
+    }
+  };
+
+  sourceElement.setAttribute("src", audioSrc);
+  video.addEventListener("loadedmetadata", restorePlaybackPosition);
+  video.load();
 }
 
 function playManagedVideo(video, { withSound = false, userInitiated = false } = {}) {
@@ -381,6 +418,13 @@ function playManagedVideo(video, { withSound = false, userInitiated = false } = 
   }
 
   const state = ensureAmbientVideoState(video);
+
+  if (userInitiated) {
+    state.userPaused = false;
+  } else if (state.userPaused) {
+    updateVideoButtonState(video);
+    return Promise.resolve(false);
+  }
 
   if (wantsSound) {
     muteAllOtherVideos(video);
@@ -472,6 +516,7 @@ function enableVideoSound(video) {
 
   muteAllOtherVideos(video);
   sharedAudioState.audibleVideo = video;
+  ensureAudioVideoSource(video);
   prepareAmbientVideo(video, { withSound: true });
   ensureBaseVideoSource(video);
 
@@ -510,10 +555,25 @@ function insertVideoControls(video) {
   const playButton = document.createElement("button");
   playButton.type = "button";
   playButton.className = "video-control video-control-play";
-  playButton.textContent = "Play";
+  playButton.innerHTML = `
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path class="video-control-icon-play" d="M6.5 4.75 15 10l-8.5 5.25V4.75Z"></path>
+      <path class="video-control-icon-pause" d="M5.75 4.75h3v10.5h-3V4.75Zm5.5 0h3v10.5h-3V4.75Z"></path>
+    </svg>`;
   playButton.setAttribute("aria-label", "Play video");
+  playButton.setAttribute("title", "Play video");
   playButton.hidden = true;
   playButton.addEventListener("click", () => {
+    const currentState = ensureAmbientVideoState(video);
+
+    if (!video.paused && !video.ended) {
+      currentState.userPaused = true;
+      currentState.autoplayBlocked = false;
+      video.pause();
+      updateVideoButtonState(video);
+      return;
+    }
+
     const shouldKeepSound = isAudibleVideo(video) && isAudioCapableVideo(video);
     playManagedVideo(video, { withSound: shouldKeepSound, userInitiated: true });
   });
@@ -544,6 +604,10 @@ function insertVideoControls(video) {
   state.controls = controls;
   state.playButton = playButton;
   state.soundButton = soundButton;
+
+  ["play", "playing", "pause", "ended", "error"].forEach((eventName) => {
+    video.addEventListener(eventName, () => updateVideoButtonState(video));
+  });
 
   updateVideoButtonState(video);
 }
@@ -641,7 +705,7 @@ function bindPortfolioReadyPlayback(video) {
     video.removeEventListener("loadeddata", handleReady);
     video.removeEventListener("canplay", handleReady);
 
-    if (isPortfolioVideoVisible(video) && !reduceMotion.matches) {
+    if (isPortfolioVideoVisible(video) && !reduceMotion.matches && !nextState.userPaused) {
       playManagedVideo(video, { withSound: isAudibleVideo(video) });
     }
   };
@@ -663,7 +727,14 @@ function updatePortfolioVideo(video) {
 
   prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
 
-  if (isPortfolioVideoVisible(video)) {
+  const isVisible = isPortfolioVideoVisible(video);
+  setVideoViewportState(video, isVisible);
+
+  if (isVisible) {
+    if (ensureAmbientVideoState(video).userPaused) {
+      return;
+    }
+
     if (!ensurePortfolioVideoSource(video)) {
       return;
     }
@@ -710,15 +781,18 @@ if (ambientVideos.length && "IntersectionObserver" in window) {
         const video = entry.target;
 
         if (reduceMotion.matches) {
+          setVideoViewportState(video, entry.isIntersecting);
           stopAmbientVideo(video, { reset: video === heroVideo, clearAudio: video === sharedAudioState.audibleVideo });
           return;
         }
 
         if (entry.isIntersecting && entry.intersectionRatio >= 0.15) {
+          setVideoViewportState(video, true);
           playManagedVideo(video, { withSound: isAudibleVideo(video) });
           return;
         }
 
+        setVideoViewportState(video, false);
         stopAmbientVideo(video);
       });
     },
@@ -760,6 +834,7 @@ if (ambientVideos.length && "IntersectionObserver" in window) {
       stopAmbientVideo(video, { reset: video === heroVideo, clearAudio: video === sharedAudioState.audibleVideo });
     } else {
       prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
+      setVideoViewportState(video, true);
       playManagedVideo(video, { withSound: isAudibleVideo(video) });
     }
   });
@@ -774,6 +849,7 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
         const video = entry.target;
 
         if (reduceMotion.matches) {
+          setVideoViewportState(video, entry.isIntersecting);
           stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
           return;
         }
@@ -783,10 +859,12 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
         }
 
         if (entry.isIntersecting && entry.intersectionRatio >= 0.01) {
+          setVideoViewportState(video, true);
           updatePortfolioVideo(video);
           return;
         }
 
+        setVideoViewportState(video, false);
         stopAmbientVideo(video);
       });
     },
@@ -832,6 +910,7 @@ if (portfolioVideos.length && "IntersectionObserver" in window) {
         stopAmbientVideo(video, { reset: true, clearAudio: video === sharedAudioState.audibleVideo });
       } else {
         prepareAmbientVideo(video, { withSound: isAudibleVideo(video) });
+        setVideoViewportState(video, true);
         updatePortfolioVideo(video);
       }
     });
